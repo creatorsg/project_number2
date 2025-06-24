@@ -3,22 +3,36 @@ using System.Collections;
 
 public class PlayerMovement : MonoBehaviour
 {
-    public float movePower = 1f;
     public float jumpPower = 5f;
 
+    // 이동 관련
+    public float maxMoveSpeed = 7f;
+    public float moveAccelTime = 0.1f;
+
+    // 대시 관련
     public float dashSpeed = 7.5f;
-    public float dashDuration = 0.5f;     
-    public float dashAccelTime = 0.2f;    
+    public float dashDuration = 0.5f;
+    public float dashAccelTime = 0.2f;
 
     Rigidbody2D rigid;
 
+    // 이동 상태
+    float moveInput = 0f;
+    float moveAccelTimer = 0f;
+    float currentMoveSpeed = 0f;
+    int facingDirection = 1;
+
+    // 점프 상태
     bool isJumping = false;
+    bool isGrounded = false;
+
+    // 대시 상태
     bool isDashing = false;
     bool dashKeyHeld = false;
-
     float dashTimer = 0f;
     float currentDashSpeed = 0f;
-    int dashDirection = 0; 
+    int dashDirection = 0;
+
     void Start()
     {
         rigid = gameObject.GetComponent<Rigidbody2D>();
@@ -26,11 +40,12 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetButtonDown("Jump"))
+        if (isGrounded && Input.GetButtonDown("Jump"))
         {
             isJumping = true;
         }
 
+        // 대시 입력
         dashKeyHeld = Input.GetKey(KeyCode.LeftShift);
 
         if (!isDashing && dashKeyHeld && Input.GetAxisRaw("Horizontal") != 0)
@@ -53,18 +68,30 @@ public class PlayerMovement : MonoBehaviour
 
     void Move()
     {
-        Vector3 moveVelocity = Vector3.zero;
+        moveInput = Input.GetAxisRaw("Horizontal");
 
-        if (Input.GetAxisRaw("Horizontal") < 0)
+        if (moveInput != 0)
         {
-            moveVelocity = Vector3.left;
+            // 방향 전환
+            facingDirection = moveInput > 0 ? 1 : -1;
+            Vector3 scale = transform.localScale;
+            scale.x = Mathf.Abs(scale.x) * facingDirection;
+            transform.localScale = scale;
+
+            // 가속
+            moveAccelTimer += Time.fixedDeltaTime;
+            float t = Mathf.Clamp01(moveAccelTimer / moveAccelTime);
+            currentMoveSpeed = Mathf.Lerp(0f, maxMoveSpeed, t);
         }
-        else if (Input.GetAxisRaw("Horizontal") > 0)
+        else
         {
-            moveVelocity = Vector3.right;
+            // 멈춤
+            moveAccelTimer = 0f;
+            currentMoveSpeed = 0f;
         }
 
-        transform.position += moveVelocity * movePower * Time.deltaTime;
+        // 이동
+        transform.position += Vector3.right * moveInput * currentMoveSpeed * Time.fixedDeltaTime;
     }
 
     void Jump()
@@ -72,11 +99,12 @@ public class PlayerMovement : MonoBehaviour
         if (!isJumping)
             return;
 
-        rigid.linearVelocity = Vector2.zero;
+        isJumping = false;
+        isGrounded = false;
+
+        rigid.linearVelocity = new Vector2(rigid.linearVelocity.x, 0f);
         Vector2 jumpVelocity = new Vector2(0, jumpPower);
         rigid.AddForce(jumpVelocity, ForceMode2D.Impulse);
-
-        isJumping = false;
     }
 
     void Dash()
@@ -107,5 +135,21 @@ public class PlayerMovement : MonoBehaviour
         }
 
         transform.position += Vector3.right * dashDirection * currentDashSpeed * Time.fixedDeltaTime;
+    }
+
+    void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Ground"))
+        {
+            isGrounded = true;
+        }
+    }
+
+    void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Ground"))
+        {
+            isGrounded = false;
+        }
     }
 }
